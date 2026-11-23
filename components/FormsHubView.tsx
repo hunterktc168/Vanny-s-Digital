@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   FilePlus2,
+  FileText,
   Link2,
   LogOut,
   RefreshCw,
@@ -49,6 +50,7 @@ interface FormsHubViewProps {
   onSaveBookingForm: (form: ConnectedFormMeta | null) => void;
   onSaveCheckInForm: (form: ConnectedFormMeta | null) => void;
   onAuthChange: (authed: boolean) => void;
+  onOpenFormModal?: (kind: 'direct_booking' | 'digital_checkin') => void;
 }
 
 export default function FormsHubView({
@@ -57,6 +59,7 @@ export default function FormsHubView({
   onSaveBookingForm,
   onSaveCheckInForm,
   onAuthChange,
+  onOpenFormModal,
 }: FormsHubViewProps) {
   const [user, setUser] = useState<User | null>(null);
   const [needsAuth, setNeedsAuth] = useState(true);
@@ -570,6 +573,16 @@ export default function FormsHubView({
                               </>
                             )}
                           </button>
+                          {onOpenFormModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenFormModal('direct_booking')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-teal-700" />
+                              <span>Preview Modal</span>
+                            </button>
+                          )}
                           <a
                             href={bookingForm.responderUri}
                             target="_blank"
@@ -649,6 +662,16 @@ export default function FormsHubView({
                               </>
                             )}
                           </button>
+                          {onOpenFormModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenFormModal('digital_checkin')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-teal-700" />
+                              <span>Preview Modal</span>
+                            </button>
+                          )}
                           <a
                             href={checkInForm.responderUri}
                             target="_blank"
