@@ -14,7 +14,13 @@ import {
 import { ACTION_PLAN_DAYS, SCRIPT_TEMPLATES } from '@/lib/action-plan-data';
 import courtyardImg from '@/src/assets/images/guesthouse_courtyard_1795430020156.jpg';
 
-export type NavTab = 'overview' | 'plan' | 'scripts' | 'map' | 'forms';
+export type NavTab =
+  | 'overview'
+  | 'plan'
+  | 'scripts'
+  | 'map'
+  | 'neighborhood'
+  | 'forms';
 
 interface PlanOverviewViewProps {
   completedTaskIds: string[];

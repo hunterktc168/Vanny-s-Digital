@@ -176,6 +176,15 @@ function buildCreateItemRequest(q: QuestionSeed, index: number) {
   };
 }
 
+async function safeReadJson(res: Response): Promise<Record<string, unknown> | null> {
+  try {
+    const text = await res.text();
+    return text ? (JSON.parse(text) as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -190,23 +199,33 @@ export async function GET(req: NextRequest) {
   }
 
   const safeFormId = encodeURIComponent(trimmedFormId);
-  const res = await fetch(`${FORMS_API_BASE}/${safeFormId}`, {
-    headers: { Authorization: authHeader },
-    cache: 'no-store',
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
+  let res: Response;
+  try {
+    res = await fetch(`${FORMS_API_BASE}/${safeFormId}`, {
+      headers: { Authorization: authHeader },
+      cache: 'no-store',
+    });
+  } catch {
     return NextResponse.json(
-      { error: data?.error?.message || 'Failed to retrieve Google Form' },
-      { status: res.status }
+      { error: 'Network error reaching Google Forms API' },
+      { status: 502 }
     );
   }
 
+  const data = await safeReadJson(res);
+  if (!res.ok || !data) {
+    const errMsg = (data?.error as { message?: string } | undefined)?.message;
+    return NextResponse.json(
+      { error: errMsg || 'Failed to retrieve Google Form' },
+      { status: res.ok ? 502 : res.status }
+    );
+  }
+
+  const info = data.info as { title?: string; description?: string } | undefined;
   return NextResponse.json({
     formId: data.formId,
-    title: data.info?.title ?? 'Untitled Form',
-    description: data.info?.description ?? '',
+    title: info?.title ?? 'Untitled Form',
+    description: info?.description ?? '',
     responderUri: data.responderUri ?? '',
     itemsCount: Array.isArray(data.items) ? data.items.length : 0,
   });
@@ -235,25 +254,34 @@ export async function POST(req: NextRequest) {
   const config = getTemplateConfig(body.template);
 
   // Step 1: Create the base Google Form
-  const createRes = await fetch(FORMS_API_BASE, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      info: {
-        title: config.title,
-        documentTitle: config.documentTitle,
+  let createRes: Response;
+  try {
+    createRes = await fetch(FORMS_API_BASE, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/json',
       },
-    }),
-  });
-
-  const createdForm = await createRes.json();
-  if (!createRes.ok || !createdForm.formId) {
+      body: JSON.stringify({
+        info: {
+          title: config.title,
+          documentTitle: config.documentTitle,
+        },
+      }),
+    });
+  } catch {
     return NextResponse.json(
-      { error: createdForm?.error?.message || 'Failed to create Google Form' },
-      { status: createRes.status || 500 }
+      { error: 'Network error creating Google Form' },
+      { status: 502 }
+    );
+  }
+
+  const createdForm = await safeReadJson(createRes);
+  if (!createRes.ok || !createdForm?.formId) {
+    const errMsg = (createdForm?.error as { message?: string } | undefined)?.message;
+    return NextResponse.json(
+      { error: errMsg || 'Failed to create Google Form' },
+      { status: createRes.ok ? 502 : createRes.status || 500 }
     );
   }
 
@@ -272,36 +300,49 @@ export async function POST(req: NextRequest) {
     ...config.questions.map((q, idx) => buildCreateItemRequest(q, idx)),
   ];
 
-  const batchRes = await fetch(`${FORMS_API_BASE}/${safeFormId}:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      includeFormInResponse: true,
-      requests,
-    }),
-  });
-
-  const updatedPayload = await batchRes.json();
-  if (!batchRes.ok) {
+  let batchRes: Response;
+  try {
+    batchRes = await fetch(`${FORMS_API_BASE}/${safeFormId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        includeFormInResponse: true,
+        requests,
+      }),
+    });
+  } catch {
     return NextResponse.json(
       {
-        error:
-          updatedPayload?.error?.message ||
-          'Form created, but failed to add questions via batchUpdate.',
+        error: 'Network error adding questions to the created Google Form.',
         formId: createdForm.formId,
       },
-      { status: batchRes.status }
+      { status: 502 }
     );
   }
 
-  const finalForm = updatedPayload.form ?? createdForm;
+  const updatedPayload = await safeReadJson(batchRes);
+  if (!batchRes.ok || !updatedPayload) {
+    const errMsg = (updatedPayload?.error as { message?: string } | undefined)?.message;
+    return NextResponse.json(
+      {
+        error: errMsg || 'Form created, but failed to add questions via batchUpdate.',
+        formId: createdForm.formId,
+      },
+      { status: batchRes.ok ? 502 : batchRes.status }
+    );
+  }
+
+  const finalForm =
+    (updatedPayload.form as Record<string, unknown> | undefined) ?? createdForm;
+  const finalInfo = finalForm.info as { title?: string; description?: string } | undefined;
+
   return NextResponse.json({
     formId: finalForm.formId,
-    title: finalForm.info?.title ?? config.title,
-    description: finalForm.info?.description ?? config.description,
+    title: finalInfo?.title ?? config.title,
+    description: finalInfo?.description ?? config.description,
     responderUri: finalForm.responderUri ?? createdForm.responderUri ?? '',
     itemsCount: Array.isArray(finalForm.items) ? finalForm.items.length : config.questions.length,
   });

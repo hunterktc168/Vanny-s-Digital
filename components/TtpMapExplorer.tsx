@@ -248,6 +248,7 @@ function TtpMapWorkspace() {
   const [copiedRoute, setCopiedRoute] = useState(false);
 
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
+  const latestSearchIdRef = useRef(0);
 
   const clearPolylines = useCallback(() => {
     for (const poly of polylinesRef.current) {
@@ -284,6 +285,7 @@ function TtpMapWorkspace() {
   const runCategorySearch = useCallback(
     async (categoryId: string) => {
       if (!placesLib) return;
+      const searchId = ++latestSearchIdRef.current;
       const cat = PLACE_CATEGORIES.find((c) => c.id === categoryId) ?? PLACE_CATEGORIES[0];
       setActiveCategory(cat.id);
       setIsSearching(true);
@@ -331,6 +333,8 @@ function TtpMapWorkspace() {
           foundPlaces = resp.places ?? [];
         }
 
+        if (searchId !== latestSearchIdRef.current) return;
+
         const mapped = mapPlacesResponse(foundPlaces);
         setPlaces(mapped);
 
@@ -343,12 +347,15 @@ function TtpMapWorkspace() {
           map.fitBounds(bounds, 48);
         }
       } catch (err) {
+        if (searchId !== latestSearchIdRef.current) return;
         checkQuotaError(err);
         setPlacesError(
           err instanceof Error ? err.message : 'Unable to fetch nearby Toul Tom Pong spots.'
         );
       } finally {
-        setIsSearching(false);
+        if (searchId === latestSearchIdRef.current) {
+          setIsSearching(false);
+        }
       }
     },
     [placesLib, map, coreLib]
@@ -357,6 +364,7 @@ function TtpMapWorkspace() {
   const runTextSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!placesLib || !customQuery.trim()) return;
+    const searchId = ++latestSearchIdRef.current;
     setIsSearching(true);
     setPlacesError(null);
     setSelectedPlace(null);
@@ -382,6 +390,8 @@ function TtpMapWorkspace() {
         language: 'en',
         region: 'KH',
       });
+      if (searchId !== latestSearchIdRef.current) return;
+
       const mapped = mapPlacesResponse(resp.places ?? []);
       setPlaces(mapped);
 
@@ -394,10 +404,13 @@ function TtpMapWorkspace() {
         map.fitBounds(bounds, 48);
       }
     } catch (err) {
+      if (searchId !== latestSearchIdRef.current) return;
       checkQuotaError(err);
       setPlacesError(err instanceof Error ? err.message : 'Place search failed.');
     } finally {
-      setIsSearching(false);
+      if (searchId === latestSearchIdRef.current) {
+        setIsSearching(false);
+      }
     }
   };
 

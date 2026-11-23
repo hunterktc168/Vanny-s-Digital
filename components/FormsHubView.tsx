@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { User } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -132,10 +132,22 @@ export default function FormsHubView({
     onAuthChange(false);
   };
 
+  const latestResponsesReqRef = useRef(0);
+
+  const parseResponseJson = async (res: Response) => {
+    const raw = await res.text();
+    try {
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
   const loadResponses = useCallback(async (formId: string) => {
     const token = getFormsAccessToken();
     if (!token || !formId) return;
 
+    const reqId = ++latestResponsesReqRef.current;
     setIsLoadingResponses(true);
     setResponsesError(null);
     try {
@@ -145,7 +157,9 @@ export default function FormsHubView({
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      const data = await res.json();
+      const data = await parseResponseJson(res);
+      if (reqId !== latestResponsesReqRef.current) return;
+
       if (!res.ok) {
         if (res.status === 401) {
           setNeedsAuth(true);
@@ -153,13 +167,16 @@ export default function FormsHubView({
         }
         throw new Error(data.error || 'Could not load responses.');
       }
-      setResponsesData(data);
+      setResponsesData(data as FormResponsesPayload);
     } catch (err) {
+      if (reqId !== latestResponsesReqRef.current) return;
       setResponsesError(
         err instanceof Error ? err.message : 'Failed to load form submissions.'
       );
     } finally {
-      setIsLoadingResponses(false);
+      if (reqId === latestResponsesReqRef.current) {
+        setIsLoadingResponses(false);
+      }
     }
   }, [onAuthChange]);
 
@@ -202,16 +219,16 @@ export default function FormsHubView({
         },
         body: JSON.stringify({ template: pendingCreateKind }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) {
         throw new Error(data.error || 'Failed to create Google Form.');
       }
 
       if (pendingCreateKind === 'direct_booking') {
-        onSaveBookingForm(data);
+        onSaveBookingForm(data as ConnectedFormMeta);
         setActiveResponseTab('direct_booking');
       } else {
-        onSaveCheckInForm(data);
+        onSaveCheckInForm(data as ConnectedFormMeta);
         setActiveResponseTab('digital_checkin');
       }
       setPendingCreateKind(null);
@@ -239,16 +256,16 @@ export default function FormsHubView({
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) {
         throw new Error(data.error || 'Could not locate form with that ID.');
       }
 
       if (manualSlot === 'direct_booking') {
-        onSaveBookingForm(data);
+        onSaveBookingForm(data as ConnectedFormMeta);
         setActiveResponseTab('direct_booking');
       } else {
-        onSaveCheckInForm(data);
+        onSaveCheckInForm(data as ConnectedFormMeta);
         setActiveResponseTab('digital_checkin');
       }
       setManualFormId('');
@@ -594,6 +611,13 @@ export default function FormsHubView({
                           </a>
                         </>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => onSaveBookingForm(null)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                      >
+                        Disconnect
+                      </button>
                     </div>
                   </div>
                   {bookingForm.responderUri && (
@@ -683,6 +707,13 @@ export default function FormsHubView({
                           </a>
                         </>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => onSaveCheckInForm(null)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                      >
+                        Disconnect
+                      </button>
                     </div>
                   </div>
                   {checkInForm.responderUri && (
@@ -827,8 +858,8 @@ export default function FormsHubView({
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-medium text-slate-500">
                       <th className="py-3 px-4 whitespace-nowrap">Submitted</th>
-                      {responsesData?.questions.slice(0, 5).map((q) => (
-                        <th key={q.questionId} className="py-3 px-4 max-w-[180px] truncate">
+                      {responsesData?.questions.map((q) => (
+                        <th key={q.questionId} className="py-3 px-4 max-w-[200px] truncate whitespace-nowrap">
                           {q.title}
                         </th>
                       ))}
@@ -842,7 +873,7 @@ export default function FormsHubView({
                             ? new Date(resp.submittedAt).toLocaleDateString()
                             : '—'}
                         </td>
-                        {responsesData?.questions.slice(0, 5).map((q) => (
+                        {responsesData?.questions.map((q) => (
                           <td
                             key={q.questionId}
                             className="py-3 px-4 text-slate-800 max-w-[220px] truncate"

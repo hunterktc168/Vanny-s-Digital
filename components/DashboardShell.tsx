@@ -6,6 +6,7 @@ import {
   CalendarCheck2,
   CheckCircle2,
   ClipboardList,
+  Compass,
   Download,
   FileSpreadsheet,
   FileText,
@@ -21,6 +22,7 @@ import PlanOverviewView, { NavTab } from './PlanOverviewView';
 import DailyPlanView from './DailyPlanView';
 import ScriptVaultView from './ScriptVaultView';
 import TtpMapExplorer from './TtpMapExplorer';
+import NeighborhoodGuideView from './NeighborhoodGuideView';
 import FormsHubView, { ConnectedFormMeta } from './FormsHubView';
 import GoogleFormModal, { GoogleFormModalType } from './GoogleFormModal';
 
@@ -38,6 +40,7 @@ const NAV_ITEMS: Array<{
   { id: 'plan', label: '7-Day Launch Plan', icon: CalendarCheck2 },
   { id: 'scripts', label: 'Script Vault', icon: MessageSquare },
   { id: 'map', label: 'TTP Map & Routes', icon: MapPin },
+  { id: 'neighborhood', label: 'Neighborhood Guide', icon: Compass },
   { id: 'forms', label: 'Booking & Check-In', icon: FileSpreadsheet },
 ];
 
@@ -84,7 +87,9 @@ export default function DashboardShell({
       origError.apply(console, args);
       const msg = args.map((a) => String(a)).join(' ');
       if (msg.includes('OverQuotaMapError') || msg.includes('QuotaExceededError')) {
-        window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+        queueMicrotask(() => {
+          window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+        });
       }
     };
 
@@ -586,6 +591,10 @@ export default function DashboardShell({
                 {activeTab === 'scripts' && <ScriptVaultView />}
 
                 {activeTab === 'map' && <TtpMapExplorer apiKey={effectiveMapsApiKey} />}
+
+                {activeTab === 'neighborhood' && (
+                  <NeighborhoodGuideView apiKey={effectiveMapsApiKey} />
+                )}
 
                 {activeTab === 'forms' && (
                   <FormsHubView
