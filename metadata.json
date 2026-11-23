@@ -1,0 +1,6 @@
+{
+  "name": "Vanny's Peaceful Guesthouse Ops",
+  "description": "7-Day Digital Marketing & Operations Dashboard for Vanny's Peaceful Guesthouse in Toul Tom Pong, Phnom Penh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
